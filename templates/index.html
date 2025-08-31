@@ -1,0 +1,169 @@
+{{- /* Full layout + HTMX partials. Behavior:
+   - Opening settings does NOT refresh grid (but the Settings pill turns green via OOB).
+   - "Apply changes" closes settings AND refreshes grid with new chords.
+*/ -}}
+
+{{define "layout"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Random Chords</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="spacer"></div>
+      <h1 class="logo">RANCHORDS</h1>
+      <div class="spacer"></div>
+    </div>
+  </header>
+
+  {{template "main" .}}
+
+  <script>
+    (function () {
+      function wire(){
+        const sel = document.querySelector('#count-select');
+        if (!sel) return;
+        const btn = sel.querySelector('.select__button');
+        const menu = sel.querySelector('.menu');
+        function setOpen(open) {
+          sel.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (open) {
+            document.addEventListener('click', onDoc, true);
+            document.addEventListener('keydown', onKey);
+          } else {
+            document.removeEventListener('click', onDoc, true);
+            document.removeEventListener('keydown', onKey);
+          }
+        }
+        function onDoc(e) { if (!sel.contains(e.target)) setOpen(false); }
+        function onKey(e) { if (e.key === 'Escape') setOpen(false); }
+        btn.addEventListener('click', (e) => { e.stopPropagation(); setOpen(sel.getAttribute('aria-expanded') !== 'true'); });
+        menu.addEventListener('click', (e) => { e.stopPropagation(); setOpen(false); });
+      }
+      wire();
+      document.body.addEventListener('htmx:afterSwap', (evt) => {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'main') {
+          wire();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
+{{end}}
+
+{{define "main"}}
+<main id="main" class="board">
+  <div class="meta meta-bar">
+    <a class="pill pill--click"
+       href="{{hrefCurrent .Settings}}"
+       hx-get="/grid?{{queryCurrent .Settings}}"
+       hx-target=".grid--wordle"
+       hx-swap="outerHTML">Shuffle</a>
+
+    <div class="pill select" id="count-select" aria-haspopup="listbox" aria-expanded="false">
+      <button type="button" class="select__button">
+        Cards: {{.Settings.Count}} <span class="caret">▾</span>
+      </button>
+      <div class="menu" role="listbox">
+        {{range $n := slice 4 8 12 16 24 32}}
+        <a role="option" href="{{hrefCount $.Settings $n}}"
+           hx-get="/main?{{queryCount $.Settings $n}}" hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefCount $.Settings $n}}">{{$n}}</a>
+        {{end}}
+      </div>
+    </div>
+
+    <!-- Settings toggle: open -> swap settings only (no shuffle) + OOB update turns this green;
+         close -> re-render main (shuffle) -->
+    <a id="settings-toggle"
+       class="pill pill--click settings-toggle {{if .Settings.ShowSettings}}is-on{{else}}is-off{{end}}"
+       href="{{hrefFlip .Settings "settings"}}"
+       {{if .Settings.ShowSettings}}
+       hx-get="/main?{{queryFlip .Settings "settings"}}"
+       hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
+       {{else}}
+       hx-get="/settings?{{queryFlip .Settings "settings"}}"
+       hx-target="#settings-host" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
+       {{end}}>Settings</a>
+  </div>
+
+  <!-- Stable settings host; opening settings swaps only this block -->
+  <div id="settings-host">
+    {{if .Settings.ShowSettings}}
+      {{template "settings" .}}
+    {{end}}
+  </div>
+
+  {{template "grid" .}}
+</main>
+{{end}}
+
+{{define "settings_host"}}
+<!-- OOB update to keep the Settings pill (green dot) in sync when opening panel -->
+<a id="settings-toggle" class="pill pill--click settings-toggle {{if .Settings.ShowSettings}}is-on{{else}}is-off{{end}}"
+   href="{{hrefFlip .Settings "settings"}}"
+   {{if .Settings.ShowSettings}}
+   hx-get="/main?{{queryFlip .Settings "settings"}}"
+   hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
+   {{else}}
+   hx-get="/settings?{{queryFlip .Settings "settings"}}"
+   hx-target="#settings-host" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
+   {{end}}
+   hx-swap-oob="true">Settings</a>
+
+<div id="settings-host">
+  {{if .Settings.ShowSettings}}
+    {{template "settings" .}}
+  {{end}}
+</div>
+{{end}}
+
+{{define "settings"}}
+<section class="settings-wrap">
+  <div class="rule"></div>
+  <section class="settings-panel">
+    <div class="settings-grid">
+      {{range .Groups}}
+        <div class="label">{{.Label}}</div>
+        <div class="pills">
+          {{range .Options}}
+            <a class="pill pill--click {{if .On}}is-on{{else}}is-off{{end}}"
+               href="{{hrefFlip $.Settings .Key}}"
+               hx-get="/settings?{{queryFlip $.Settings .Key}}"
+               hx-target="#settings-host" hx-swap="outerHTML"
+               hx-push-url="{{hrefFlip $.Settings .Key}}">{{.Title}}</a>
+          {{end}}
+        </div>
+      {{end}}
+      <!-- Single action: Apply changes = close settings + new chords -->
+      <div class="label">Apply</div>
+      <div class="pills">
+        <a class="pill pill--click is-on"
+           href="{{hrefFlip .Settings "settings"}}"
+           hx-get="/main?{{queryFlip .Settings "settings"}}"
+           hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}">Apply changes</a>
+      </div>
+    </div>
+  </section>
+  <div class="rule"></div>
+</section>
+{{end}}
+
+{{define "grid"}}
+<section class="grid grid--wordle">
+  {{range $i, $c := .Chords}}
+  <div class="tile" style="animation-delay: {{mul $i 30}}ms">
+    <span class="chord">
+      <span class="root">{{index (splitChord $c) 0}}</span><span class="suffix">{{index (splitChord $c) 1}}</span>
+    </span>
+  </div>
+  {{end}}
+</section>
+{{end}}
+

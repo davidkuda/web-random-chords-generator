@@ -1,0 +1,9 @@
+<section class="grid grid--wordle">
+  {{range $i, $c := .Chords}}
+  <div class="tile" style="animation-delay: {{mul $i 30}}ms">
+    <span class="chord">
+      <span class="root">{{index (splitChord $c) 0}}</span><span class="suffix">{{index (splitChord $c) 1}}</span>
+    </span>
+  </div>
+  {{end}}
+</section>

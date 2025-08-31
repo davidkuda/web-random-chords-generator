@@ -1,0 +1,19 @@
+<section class="settings-wrap">
+  <div class="rule"></div>
+  <section class="settings-panel">
+    <div class="settings-grid">
+      {{range .Groups}}
+        <div class="label">{{.Label}}</div>
+        <div class="pills">
+          {{range .Options}}
+            <a class="pill pill--click {{if .On}}is-on{{else}}is-off{{end}}"
+               hx-get="/settings{{hrefFlip $.Settings .Key}}"
+               hx-target=".settings-wrap"
+               hx-swap="outerHTML">{{.Title}}</a>
+          {{end}}
+        </div>
+      {{end}}
+    </div>
+  </section>
+  <div class="rule"></div>
+</section>
