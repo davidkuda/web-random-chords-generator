@@ -82,7 +82,7 @@ func main() {
     // HTMX fragments
     http.HandleFunc("/main", handleMain)         // renders only <main>
     http.HandleFunc("/grid", handleGrid)         // renders only tiles grid
-    http.HandleFunc("/settings", handleSettings) // renders only settings host
+    http.HandleFunc("/settings", handleSettings) // renders settings host (+ OOB toggle)
 
     log.Println("Listening on :8875")
     if err := http.ListenAndServe(":8875", nil); err != nil {
@@ -123,7 +123,7 @@ func (s Settings) toValues() url.Values {
     return v
 }
 
-func onOff(b bool) string { if b { return "on" }; return "off" }
+func onOff(b bool) string { if b { return "on" } else { return "off" } }
 
 // Pretty hrefs for progressive enhancement
 func hrefCurrent(s Settings) string { return "/?" + s.toValues().Encode() }
@@ -182,7 +182,6 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
     s := parseSettings(r)
     data := PageData{Chords: renderRandomChords(s), Settings: s, Groups: buildGroups(s)}
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
-    // Always render full page
     if err := tmplIndex.ExecuteTemplate(w, "layout", data); err != nil {
         http.Error(w, "template error", http.StatusInternalServerError)
     }
@@ -190,7 +189,6 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func isHX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }
 
-// If someone hits fragment endpoints directly (no HX), redirect to full page with same query.
 func fragmentFallback(w http.ResponseWriter, r *http.Request) bool {
     if !isHX(r) {
         http.Redirect(w, r, "/?"+r.URL.RawQuery, http.StatusFound)
@@ -224,7 +222,6 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
     s := parseSettings(r)
     data := PageData{Settings: s, Groups: buildGroups(s)}
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
-    // Always return the host container to avoid targetError
     if err := tmplIndex.ExecuteTemplate(w, "settings_host", data); err != nil {
         http.Error(w, "template error", http.StatusInternalServerError)
     }
@@ -374,3 +371,4 @@ func seedRand() {
     }
     mrand.Seed(time.Now().UnixNano())
 }
+

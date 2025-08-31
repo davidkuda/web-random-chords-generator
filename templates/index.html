@@ -1,7 +1,4 @@
-{{- /* Full layout + HTMX partials. Behavior:
-   - Opening settings does NOT refresh grid (but the Settings pill turns green via OOB).
-   - "Apply changes" closes settings AND refreshes grid with new chords.
-*/ -}}
+{{- /* Full layout + HTMX partials. Opening settings does NOT refresh grid; clicking Apply both closes settings and regenerates grid. Light mode only. */ -}}
 
 {{define "layout"}}
 <!doctype html>
@@ -79,21 +76,15 @@
       </div>
     </div>
 
-    <!-- Settings toggle: open -> swap settings only (no shuffle) + OOB update turns this green;
-         close -> re-render main (shuffle) -->
+    <!-- Settings toggle: swaps only the settings; pill state kept in sync by OOB update -->
     <a id="settings-toggle"
        class="pill pill--click settings-toggle {{if .Settings.ShowSettings}}is-on{{else}}is-off{{end}}"
        href="{{hrefFlip .Settings "settings"}}"
-       {{if .Settings.ShowSettings}}
-       hx-get="/main?{{queryFlip .Settings "settings"}}"
-       hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
-       {{else}}
        hx-get="/settings?{{queryFlip .Settings "settings"}}"
-       hx-target="#settings-host" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
-       {{end}}>Settings</a>
+       hx-target="#settings-host" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}">Settings</a>
   </div>
 
-  <!-- Stable settings host; opening settings swaps only this block -->
+  <!-- Stable settings host -->
   <div id="settings-host">
     {{if .Settings.ShowSettings}}
       {{template "settings" .}}
@@ -105,16 +96,12 @@
 {{end}}
 
 {{define "settings_host"}}
-<!-- OOB update to keep the Settings pill (green dot) in sync when opening panel -->
-<a id="settings-toggle" class="pill pill--click settings-toggle {{if .Settings.ShowSettings}}is-on{{else}}is-off{{end}}"
+<!-- OOB update keeps Settings pill (green dot) in sync when opening/closing -->
+<a id="settings-toggle"
+   class="pill pill--click settings-toggle {{if .Settings.ShowSettings}}is-on{{else}}is-off{{end}}"
    href="{{hrefFlip .Settings "settings"}}"
-   {{if .Settings.ShowSettings}}
-   hx-get="/main?{{queryFlip .Settings "settings"}}"
-   hx-target="#main" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
-   {{else}}
    hx-get="/settings?{{queryFlip .Settings "settings"}}"
    hx-target="#settings-host" hx-swap="outerHTML" hx-push-url="{{hrefFlip .Settings "settings"}}"
-   {{end}}
    hx-swap-oob="true">Settings</a>
 
 <div id="settings-host">
@@ -141,7 +128,7 @@
           {{end}}
         </div>
       {{end}}
-      <!-- Single action: Apply changes = close settings + new chords -->
+      <!-- Single Apply button: closes settings & refreshes grid -->
       <div class="label">Apply</div>
       <div class="pills">
         <a class="pill pill--click is-on"
