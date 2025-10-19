@@ -5,7 +5,6 @@ import (
 	"log"
 	mrand "math/rand/v2"
 	"net/http"
-	"fmt"
 )
 
 var tmplIndex *template.Template
@@ -245,20 +244,12 @@ func getRandomChords(s Settings) []string {
 	}
 
 	chords := make([]string, s.Count)
-	fmt.Println("roots:", roots)
-	fmt.Println("suffixes:", suffixes)
-	pFreq := make(map[int]int)
 	for i := 0; i < s.Count; i++ {
 		p := mrand.IntN(len(roots))
-		pFreq[p]++
 		root := roots[p]
 		k := mrand.IntN(len(suffixes))
 		suf := suffixes[k]
 		chords[i] = root + suf
-	}
-	fmt.Println(pFreq)
-	for i, root := range roots {
-		fmt.Printf("%2d\t%s\t%2d\n", i, root, pFreq[i])
 	}
 	return chords
 }
