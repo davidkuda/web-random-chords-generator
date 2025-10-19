@@ -1,53 +1,14 @@
 package main
 
 import (
-	crand "crypto/rand"
-	"encoding/binary"
 	"html/template"
 	"log"
 	mrand "math/rand/v2"
 	"net/http"
-	"strconv"
-	"time"
+	"fmt"
 )
 
 var tmplIndex *template.Template
-
-type Settings struct {
-	// Root accidentals
-	IncludeFlats  bool // include ♭ roots
-	IncludeSharps bool // include ♯ roots
-
-	// Triads
-	IncludeMajTriad bool // ""
-	IncludeMinTriad bool // "min"
-	IncludeAug      bool // "aug"
-	IncludeDim      bool // "dim"
-
-	// Sevenths
-	IncludeMaj7   bool // "maj7"
-	IncludeDom7   bool // "7"
-	IncludeMin7   bool // "min7"
-	IncludeMin7b5 bool // "min7♭5"
-
-	// Ninths
-	IncludeMaj9 bool // "maj9"
-	IncludeDom9 bool // "9"
-	IncludeMin9 bool // "min9"
-
-	// Extensions
-	IncludeMaj7Sharp11 bool // "maj7♯11"
-
-	// Altered (dominant)
-	IncludeAlt      bool // "alt"
-	Include7b9      bool // "7♭9"
-	Include7Sharp11 bool // "7♯11"
-	Include7Sharp5  bool // "7♯5"
-
-	// UI
-	ShowSettings bool
-	Count        int
-}
 
 // Data-driven settings UI
 type Option struct {
@@ -68,7 +29,6 @@ type PageData struct {
 }
 
 func main() {
-	seedRand()
 	parseTemplates()
 
 	fs := http.FileServer(http.Dir("static"))
@@ -78,9 +38,9 @@ func main() {
 	http.HandleFunc("/", handleIndex)
 
 	// HTMX fragments
-	http.HandleFunc("/main", handleMain)         // renders only <main>
-	http.HandleFunc("/grid", handleGrid)         // renders only tiles grid
-	http.HandleFunc("/settings", handleSettings) // renders settings host (+ OOB toggle)
+	http.HandleFunc("/main", handleMain)
+	http.HandleFunc("/grid", handleGrid)
+	http.HandleFunc("/settings", handleSettings)
 
 	log.Println("Listening on :8875")
 	if err := http.ListenAndServe(":8875", nil); err != nil {
@@ -90,7 +50,11 @@ func main() {
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	s := parseSettings(r)
-	data := PageData{Chords: renderRandomChords(s), Settings: s, Groups: buildGroups(s)}
+	data := PageData{
+		Chords: getRandomChords(s),
+		Settings: s,
+		Groups: buildGroups(s),
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmplIndex.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -112,7 +76,7 @@ func handleMain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := parseSettings(r)
-	data := PageData{Chords: renderRandomChords(s), Settings: s, Groups: buildGroups(s)}
+	data := PageData{Chords: getRandomChords(s), Settings: s, Groups: buildGroups(s)}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmplIndex.ExecuteTemplate(w, "main", data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -124,7 +88,7 @@ func handleGrid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := parseSettings(r)
-	data := PageData{Chords: renderRandomChords(s), Settings: s}
+	data := PageData{Chords: getRandomChords(s), Settings: s}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmplIndex.ExecuteTemplate(w, "grid", data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -140,60 +104,6 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmplIndex.ExecuteTemplate(w, "settings_host", data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
-	}
-}
-
-// ---------------- settings parsing ----------------
-func parseSettings(r *http.Request) Settings {
-	q := r.URL.Query()
-
-	val := func(key string, def bool) bool {
-		if v := q.Get(key); v != "" {
-			return v == "on"
-		}
-		return def
-	}
-
-	count := 16
-	if v := q.Get("count"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 400 {
-			count = n
-		}
-	}
-
-	return Settings{
-		// Triads
-		IncludeMajTriad: val("maj", true),
-		IncludeMinTriad: val("min", true),
-		IncludeAug:      val("aug", false),
-		IncludeDim:      val("dim", false),
-
-		// 7ths
-		IncludeMaj7:   val("maj7", false),
-		IncludeDom7:   val("dom7", false),
-		IncludeMin7:   val("min7", false),
-		IncludeMin7b5: val("m7b5", false),
-
-		// 9ths
-		IncludeMaj9: val("maj9", false),
-		IncludeDom9: val("dom9", false),
-		IncludeMin9: val("min9", false),
-
-		// Extensions
-		IncludeMaj7Sharp11: val("maj7sharp11", false),
-
-		// Altered
-		IncludeAlt:      val("alt", false),
-		Include7b9:      val("sevenb9", false),
-		Include7Sharp11: val("sevensharp11", false),
-		Include7Sharp5:  val("sevensharp5", false),
-
-		// Accidentals
-		IncludeFlats:  val("flats", true),
-		IncludeSharps: val("sharps", true),
-
-		ShowSettings: q.Get("settings") == "on",
-		Count:        count,
 	}
 }
 
@@ -233,20 +143,42 @@ func buildGroups(s Settings) []Group {
 	}
 }
 
-// ---------------- chord gen ----------------
-func renderRandomChords(s Settings) []string {
-	// Start with full chromatic set (prefer flats for E♭/A♭/B♭)
-	allRoots := []string{"C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"}
+// builds
+// var roots []string like Ab, C#, G, etc
+// var suffixes []string like min, Maj7, Alt, etc
+// and uses both to create a var chords []string to render the chords.
+func getRandomChords(s Settings) []string {
+	allRoots := []string{
+		"A♭",
+		"A",
+		"A♯",
+		"B♭",
+		"B",
+		"C",
+		"C♯",
+		"D♭",
+		"D",
+		"D♯",
+		"E♭",
+		"E",
+		"F",
+		"F♯",
+		"G♭",
+		"G",
+		"G♯",
+	}
 
 	// Filter roots by accidental settings
 	var roots []string
-	for _, r := range allRoots {
+	for _, root := range allRoots {
 		hasFlat, hasSharp := false, false
-		for _, ch := range r {
+		for _, ch := range root {
 			if ch == '♭' {
 				hasFlat = true
+				break
 			} else if ch == '♯' {
 				hasSharp = true
+				break
 			}
 		}
 		if hasFlat && !s.IncludeFlats {
@@ -255,12 +187,8 @@ func renderRandomChords(s Settings) []string {
 		if hasSharp && !s.IncludeSharps {
 			continue
 		}
-		roots = append(roots, r)
+		roots = append(roots, root)
 	}
-	if len(roots) == 0 { // user turned both flats & sharps off -> naturals only
-		roots = []string{"C", "D", "E", "F", "G", "A", "B"}
-	}
-
 	// Build suffix set based on toggles
 	var suffixes []string
 	if s.IncludeMajTriad {
@@ -313,24 +241,24 @@ func renderRandomChords(s Settings) []string {
 	}
 
 	if len(suffixes) == 0 {
-		suffixes = []string{""}
+		suffixes = append(suffixes, "")
 	}
 
 	chords := make([]string, s.Count)
+	fmt.Println("roots:", roots)
+	fmt.Println("suffixes:", suffixes)
+	pFreq := make(map[int]int)
 	for i := 0; i < s.Count; i++ {
 		p := mrand.IntN(len(roots))
-		suf := suffixes[mrand.Intn(len(suffixes))]
+		pFreq[p]++
+		root := roots[p]
 		k := mrand.IntN(len(suffixes))
+		suf := suffixes[k]
 		chords[i] = root + suf
 	}
-	return chords
-}
-
-func seedRand() {
-	var b [8]byte
-	if _, err := crand.Read(b[:]); err == nil {
-		mrand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
-		return
+	fmt.Println(pFreq)
+	for i, root := range roots {
+		fmt.Printf("%2d\t%s\t%2d\n", i, root, pFreq[i])
 	}
-	mrand.Seed(time.Now().UnixNano())
+	return chords
 }
