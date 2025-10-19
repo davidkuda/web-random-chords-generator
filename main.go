@@ -41,8 +41,8 @@ func main() {
 	http.HandleFunc("/grid", handleGrid)
 	http.HandleFunc("/settings", handleSettings)
 
-	log.Println("Listening on :8875")
-	if err := http.ListenAndServe(":8875", nil); err != nil {
+	log.Println("Listening on :8404")
+	if err := http.ListenAndServe(":8404", nil); err != nil {
 		log.Fatal(err)
 	}
 }
