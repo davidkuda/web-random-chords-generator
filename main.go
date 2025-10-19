@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"html/template"
 	"log"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -318,8 +318,9 @@ func renderRandomChords(s Settings) []string {
 
 	chords := make([]string, s.Count)
 	for i := 0; i < s.Count; i++ {
-		root := roots[mrand.Intn(len(roots))]
+		p := mrand.IntN(len(roots))
 		suf := suffixes[mrand.Intn(len(suffixes))]
+		k := mrand.IntN(len(suffixes))
 		chords[i] = root + suf
 	}
 	return chords
